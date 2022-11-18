@@ -6,8 +6,6 @@
 #include <DallasTemperature.h>
 #include <avr/wdt.h>
 
-#include "XBeeConfig.h"
-
 #define TEMP_BUS 5
 #define XBEE_RST 4
 
@@ -17,8 +15,8 @@ static uint8_t DOOR_IN_PINS[] =  {9, 8, 7, 6};
 auto timer = timer_create_default(); // create a timer with default settings
 
 //One wire temp sensors
-OneWire oneWire(TEMP_BUS);
-DallasTemperature sensors(&oneWire);
+//OneWire oneWire(TEMP_BUS);
+//DallasTemperature sensors(&oneWire);
 //Input Temp
 DeviceAddress devThermometer = {0x28, 0x2E, 0x53, 0x45, 0x92, 0x17, 0x02, 0x58};
 
@@ -275,14 +273,11 @@ Endpoint GetEndpoint(uint8_t ep_id)
 
 
 
-#define IO_XBEE_RX 2
-#define IO_XBEE_TX 3
-
 // Define SoftSerial TX/RX pins
 // Connect Arduino pin 10 to TX of usb-serial device
-#define ssRX IO_XBEE_RX
+#define ssRX 2
 // Connect Arduino pin 11 to RX of usb-serial device
-#define ssTX IO_XBEE_TX
+#define ssTX 3
 
 //XBeeAddress64 macAddr;
 
@@ -305,55 +300,25 @@ static const uint8_t netCmd[] = {'M', 'Y'};
 ZBExplicitTxRequest exp_tx = ZBExplicitTxRequest();
 
 void setup() {
-  ////wdt_enable(WDTO_8S);
-  //pinMode(XBEE_RST, OUTPUT);
-  //
-  ////Reset xbee
-  //digitalWrite(XBEE_RST, LOW);
-  //digitalWrite(XBEE_RST, HIGH);
-  //
-  //for (int i = 0; i < 4; i++) {
-  //  pinMode(DOOR_OUT_PINS[i], OUTPUT);
-  //  digitalWrite(DOOR_OUT_PINS[i], LOW);
-  //  pinMode(DOOR_IN_PINS[i], INPUT);
-  //}
-
-    while (!Serial);
+//  //wdt_enable(WDTO_8S);
+//  pinMode(XBEE_RST, OUTPUT);
+//  
+//  //Reset xbee
+//  digitalWrite(XBEE_RST, LOW);
+//  digitalWrite(XBEE_RST, HIGH);
+//  
+//  for (int i = 0; i < 4; i++) {
+//    pinMode(DOOR_OUT_PINS[i], OUTPUT);
+//    digitalWrite(DOOR_OUT_PINS[i], LOW);
+//    pinMode(DOOR_IN_PINS[i], INPUT);
+//  }
+// 
   Serial.begin(115200);
-  Serial.println(F("Startup"));
+  while (!Serial);
+  Serial.println("Startup");
 
-  sensors.begin();
+  //sensors.begin();
   nss.begin(9600);
-
-  XBeeConfig xbeeConfig(nss);
-  xbeeConfig.enterConfig();
-
-  LOG("Restore Defaults: ", xbeeConfig.send("RE"));
-  LOG("Node Identifier: ", xbeeConfig.send("NI TEST LAMP 1"));
-  LOG("Coordinator Enable: ", xbeeConfig.send("CE 0"));
-
-
-  getMAC(xbeeConfig);
-
-  assc_pending = 1;
-  getAssociation(xbeeConfig);
-
-  nwk_pending = 1;
-  getNetAddr(xbeeConfig);
-
-  if (!nwk_pending && !assc_pending) {
-      LOG("Config Cmp");
-      setup_complete = 1;
-  }
-  else {
-      LOG("Setup failed");
-  }
-
-  xbeeConfig.printConfig();
-  xbeeConfig.exitConfig();
-
-  Serial.println("setup done");
-
   xbee.setSerial(nss);
 
   //Serial.print(F("Found "));
@@ -362,7 +327,7 @@ void setup() {
 
   //sensors.setResolution(devThermometer, 9);
 
-  //delay(5000);
+  delay(5000);
 
   //Set up callbacks
   xbee.onZBExplicitRxResponse(zdoReceive);
@@ -370,42 +335,43 @@ void setup() {
   xbee.onAtCommandResponse(atCmdResp);
   xbee.onOtherResponse(otherResp);
 
+  getMAC();
   Serial.print(F("LCL Add: "));
   printAddr(macAddr.Get());
 
-  //timer.every(30000, update_temp); 
+  timer.every(30000, update_temp); 
 }
 
-/*
+
 //Update temp, serial for now
 bool  update_temp(void *) {
-  uint8_t t_ep_id = 5;
-  
-  sensors.requestTemperatures();
+  //uint8_t t_ep_id = 5;
+  //
+  //sensors.requestTemperatures();
 
-  float TempC = sensors.getTempC(devThermometer);
+  //float TempC = sensors.getTempC(devThermometer);
 
-  Serial.print(F("Dev Temp: "));
-  Serial.print(TempC);
-  Serial.println(F("°C"));
+  //Serial.print(F("Dev Temp: "));
+  //Serial.print(TempC);
+  //Serial.println(F("°C"));
 
-  if (TempC < 200 && TempC > -100){
-    //Seeing some 900 deg readings, just filtering them out
-    Endpoint end_point = GetEndpoint(t_ep_id);
-    Cluster cluster = end_point.GetCluster(TEMP_CLUSTER_ID);
-    attribute* attr = cluster.GetAttr(0x0000);
-    attr->val_len = 2;
-    uint16_t cor_t = (uint16_t)(TempC * 100.0);
-  
-    uint8_t t_value[2] = {(uint8_t)cor_t,
-                          (uint8_t)(cor_t >> 8)
-                         };
-    attr->value = t_value;
-    sendAttributeRpt(cluster.id, attr, end_point.id, end_point.id);
-  }
+  //if (TempC < 200 && TempC > -100){
+  //  //Seeing some 900 deg readings, just filtering them out
+  //  Endpoint end_point = GetEndpoint(t_ep_id);
+  //  Cluster cluster = end_point.GetCluster(TEMP_CLUSTER_ID);
+  //  attribute* attr = cluster.GetAttr(0x0000);
+  //  attr->val_len = 2;
+  //  uint16_t cor_t = (uint16_t)(TempC * 100.0);
+  //
+  //  uint8_t t_value[2] = {(uint8_t)cor_t,
+  //                        (uint8_t)(cor_t >> 8)
+  //                       };
+  //  attr->value = t_value;
+  //  sendAttributeRpt(cluster.id, attr, end_point.id, end_point.id);
+  //}
   return true;
 }
-*/
+
 void printAddr(uint64_t val) {
   uint32_t msb = val >> 32;
   uint32_t lsb = val;
@@ -437,7 +403,19 @@ void SetAttr(uint8_t ep_id, uint16_t cluster_id, uint16_t attr_id, uint8_t value
 
 void loop() {
   xbee.loop();
-
+  
+  if (associated != 0 && !assc_pending) {
+    assc_pending = 1;
+    getAssociation();
+  }
+  if (netAddr[0] == 0 && netAddr[1] == 0 && !nwk_pending && !assc_pending) {
+    nwk_pending = 1;
+    getNetAddr();
+  }
+  if (!nwk_pending && !assc_pending) {
+    //Serial.println("Config Cmp");
+    setup_complete = 1;
+  }
   if (setup_complete && !start) {
     sendDevAnnounce();
 
@@ -445,26 +423,26 @@ void loop() {
   }
   if (start) {
     
-    for (int i = 0; i < 4; i++) {
-      uint8_t val = digitalRead(DOOR_IN_PINS[i]) ^ 1;
-      Endpoint end_point = GetEndpoint(i + 1);
-      Cluster cluster = end_point.GetCluster(ON_OFF_CLUSTER_ID);
-      attribute* attr = cluster.GetAttr(0x0000);
+    //for (int i = 0; i < 4; i++) {
+    //  uint8_t val = digitalRead(DOOR_IN_PINS[i]) ^ 1;
+    //  Endpoint end_point = GetEndpoint(i + 1);
+    //  Cluster cluster = end_point.GetCluster(ON_OFF_CLUSTER_ID);
+    //  attribute* attr = cluster.GetAttr(0x0000);
 
-      if (val != *attr->value)
-      {
-        Serial.print(F("EP"));
-        Serial.print(end_point.id);
-        Serial.print(F(": "));
-        Serial.print(*attr->value);
-        Serial.print(F(" Now "));
-        Serial.println(val);
-        //uint8_t door_state = *attr->value ^ 1;
-        *attr->value = val;
-        sendAttributeRpt(cluster.id, attr, end_point.id, end_point.id);
-      }
-      
-    }
+    //  if (val != *attr->value)
+    //  {
+    //    Serial.print(F("EP"));
+    //    Serial.print(end_point.id);
+    //    Serial.print(F(": "));
+    //    Serial.print(*attr->value);
+    //    Serial.print(F(" Now "));
+    //    Serial.println(val);
+    //    //uint8_t door_state = *attr->value ^ 1;
+    //    *attr->value = val;
+    //    sendAttributeRpt(cluster.id, attr, end_point.id, end_point.id);
+    //  }
+    //  
+    //}
   }
 
 
@@ -497,7 +475,32 @@ void otherResp(XBeeResponse& resp, uintptr_t) {
 void atCmdResp(AtCommandResponse& resp, uintptr_t) {
   Serial.println(F("At resp"));
   if (resp.getStatus() == AT_OK) {
-    Serial.println(F("Ukn Cmd"));
+    if (resp.getCommand()[0] == assocCmd[0] &&
+        resp.getCommand()[1] == assocCmd[1]) {
+      //Association Status
+      associated = resp.getValue()[0];
+      assc_pending = 0;
+      Serial.print(F("Asc St: "));
+      Serial.println(associated);
+    }
+    else if (resp.getCommand()[0] == netCmd[0] &&
+             resp.getCommand()[1] == netCmd[1]) {
+      //NWK
+      for (int i = 0; i < resp.getValueLength(); i++) {
+        Serial.print(resp.getValue()[i], HEX);
+        Serial.print(F(" "));
+      }
+      Serial.println();
+      netAddr[0] = resp.getValue()[0];
+      netAddr[1] = resp.getValue()[1];
+      nwk_pending = 0;
+      Serial.print(F("NWK: "));
+      Serial.print(netAddr[0], HEX);
+      Serial.println(netAddr[1], HEX);
+    }
+    else {
+      Serial.println(F("Ukn Cmd"));
+    }
   }
   else {
     Serial.println(F("AT Fail"));
@@ -975,29 +978,78 @@ void sendSimpleDescRpt(uint8_t ep) {
 void sendBasicClusterResp() {
 }
 
-void getNetAddr(XBeeConfig& config) {
-    char* buffer = config.send("MY");
-    auto address = strtol(buffer, 0, 16);
-    netAddr[0] = address & 0xff;
-    netAddr[1] = (address >> 8) & 0xff;
-
-    nwk_pending = 0;
-    Serial.print(F("NWK: "));
-    Serial.print(netAddr[0], HEX);
-    Serial.println(netAddr[1], HEX);
+void getNetAddr() {
+  AtCommandRequest atRequest = AtCommandRequest();
+  atRequest.setCommand((uint8_t*)netCmd); //breaking(uint8_t*)at
+  xbee.send(atRequest);
 }
 
-void getAssociation(XBeeConfig& config) {
-    auto buffer = config.send("AI");
-    associated = strtol(buffer, 0, 16);
-    assc_pending = 0;
-    Serial.print(F("Asc St: "));
-    Serial.println(associated);
+uint32_t packArray(uint8_t *val) {
+  uint32_t res = 0;
+  for (int i = 0; i < 4; i++) {
+    res = res << 8 | val[i];
+  }
+  return res;
 }
 
-void getMAC(XBeeConfig& config) {
-    auto msb = strtol(config.send("SH"), 0, 16);
-    auto lsb = strtol(config.send("SL"), 0, 16);
+void getAssociation() {
+  AtCommandRequest atRequest = AtCommandRequest();
+  atRequest.setCommand((uint8_t*)assocCmd); //breaking
+  xbee.send(atRequest);
+}
 
-	macAddr.Set(XBeeAddress64(msb, lsb));
+void getMAC() {
+  uint8_t msb[4];
+  uint8_t lsb[4];
+  AtCommandResponse atResponse = AtCommandResponse();
+  AtCommandRequest atRequest = AtCommandRequest();
+  bool success = 0;
+  while (success == 0) {
+    atRequest.setCommand((uint8_t*)shCmd); //breaking
+    xbee.send(atRequest);
+    success = waitforResponse(msb);
+  }
+  success = 0;
+  while (success == 0) {
+    atRequest.setCommand((uint8_t*)slCmd); //breaking
+    xbee.send(atRequest);
+    success = waitforResponse(lsb);
+  }
+  macAddr.Set(XBeeAddress64(packArray(msb), packArray(lsb)));
+}
+
+bool waitforResponse(uint8_t *val) {
+  AtCommandResponse atResponse = AtCommandResponse();
+  if (xbee.readPacket(5000)) {
+    if (xbee.getResponse().getApiId() == AT_COMMAND_RESPONSE) {
+      xbee.getResponse().getAtCommandResponse(atResponse);
+      if (atResponse.isOk()) {
+        if (atResponse.getValueLength() > 0) {
+          //Serial.print("Size of: ");
+          //Serial.println(atResponse.getValueLength());
+          for (int i = 0; i < atResponse.getValueLength(); i++) {
+            val[i] = atResponse.getValue()[i];
+          }
+          return 1;
+        }
+      }
+      else {
+        Serial.print(F("Cmd rtrn err: "));
+        Serial.println(atResponse.getStatus(), HEX);
+      }
+    } else {
+      Serial.print(F("Exp AT got "));
+      Serial.print(xbee.getResponse().getApiId(), HEX);
+    }
+  } else {
+    // at command failed
+    if (xbee.getResponse().isError()) {
+      Serial.print(F("Er rd pkt. EC: "));
+      Serial.println(xbee.getResponse().getErrorCode());
+    }
+    else {
+      Serial.print(F("No rsp"));
+    }
+  }
+  return 0;
 }
